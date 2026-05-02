@@ -11,12 +11,14 @@ import { parseProgress } from '@/lib/parseProgress';
 import { parseConstruction } from '@/lib/parseConstruction';
 import { ProgressData, Decision } from '@/lib/progressTypes';
 import { ConstructionData } from '@/lib/constructionTypes';
+import { useChatHistory } from '@/hooks/useChatHistory';
+import { useProjectStore } from '@/hooks/useProjectStore';
+import { buildProjectContext } from '@/lib/buildProjectContext';
 
 const MermaidBlock = dynamic(() => import('@/components/MermaidBlock'), {
   ssr: false,
   loading: () => <div className="text-sm text-gray-400 py-4">图表加载中...</div>,
 });
-import { useChatHistory } from '@/hooks/useChatHistory';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -51,7 +53,7 @@ function compressImage(file: File, maxSize = 1024): Promise<string> {
   });
 }
 
-function exportDecisionsPdf(progress: ProgressData) {
+function exportDecisionsPdf(progress: ProgressData, projectName?: string) {
   const confirmed = progress.decisions.filter((d) => d.status === 'confirmed');
   const pending = progress.decisions.filter((d) => d.status !== 'confirmed');
   const now = new Date();
@@ -79,7 +81,7 @@ function exportDecisionsPdf(progress: ProgressData) {
   .pending { color: #999; font-style: italic; }
   .footer { margin-top: 40px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
 </style></head><body>
-<h1>🏠 装修需求方案</h1>
+<h1>🏠 ${projectName ? projectName + ' — ' : ''}装修需求方案</h1>
 <p>生成时间：${now.toLocaleString('zh-CN')}</p>
 
 <div class="summary">
@@ -133,6 +135,15 @@ function exportDecisionsPdf(progress: ProgressData) {
   }
 }
 
+const STAGE_LABELS: Record<string, string> = {
+  basic_info: '基本信息',
+  renovation_mode: '装修模式',
+  hard_decoration: '硬装方案',
+  main_materials: '主材选择',
+  soft_furnishing: '软装方向',
+  appliances: '家电清单',
+};
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -141,8 +152,6 @@ export default function Home() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [mode, setMode] = useState<'quest' | 'construction'>('quest');
-  const [progress, setProgress] = useState<ProgressData | null>(null);
-  const [construction, setConstruction] = useState<ConstructionData | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,34 +166,52 @@ export default function Home() {
     clearCurrent,
   } = useChatHistory();
 
+  const {
+    projects,
+    activeProjectId,
+    activeProject,
+    setActiveProjectId,
+    createProject,
+    deleteProject,
+    addSessionToProject,
+    mergeProgress,
+    mergeConstruction,
+    renameProject,
+  } = useProjectStore();
+
+  // Project-level data for the right panel
+  const projectProgress: ProgressData | null = useMemo(() => {
+    if (!activeProject || activeProject.mode !== 'quest') return null;
+    if (activeProject.decisions.length === 0) return null;
+    return {
+      current_stage: activeProject.currentStage,
+      budget: activeProject.budget,
+      timeline: activeProject.timeline,
+      decisions: activeProject.decisions,
+    };
+  }, [activeProject]);
+
+  const projectConstruction: ConstructionData | null = useMemo(() => {
+    if (!activeProject || activeProject.mode !== 'construction') return null;
+    return activeProject.constructionData;
+  }, [activeProject]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Restore progress when switching sessions
+  // Restore messages when switching sessions
   useEffect(() => {
     const session = sessions.find((s) => s.id === currentId);
     if (session) {
       setMessages(session.messages);
-      const lastAssistant = [...session.messages].reverse().find((m) => m.role === 'assistant');
-      if (lastAssistant) {
-        const { construction: restoredC } = parseConstruction(lastAssistant.content);
-        if (restoredC) {
-          setMode('construction');
-          setConstruction(restoredC);
-          setProgress(null);
-        } else {
-          const { progress: restored } = parseProgress(lastAssistant.content);
-          setProgress(restored);
-          setConstruction(null);
-          if (restored) setMode('quest');
-        }
-      } else {
-        setProgress(null);
-        setConstruction(null);
+      if (session.projectId) {
+        setActiveProjectId(session.projectId);
+        const proj = projects.find((p) => p.id === session.projectId);
+        if (proj) setMode(proj.mode);
       }
     }
-  }, [currentId, sessions]);
+  }, [currentId, sessions, projects, setActiveProjectId]);
 
   const displayMessages = useMemo(() => {
     return messages.map((msg) => {
@@ -203,7 +230,12 @@ export default function Home() {
 
       let sessionId = currentId;
       if (!sessionId) {
-        sessionId = createSession();
+        sessionId = createSession(activeProjectId || undefined,
+          activeProject ? (STAGE_LABELS[activeProject.currentStage] || activeProject.currentStage) : undefined
+        );
+        if (activeProjectId) {
+          addSessionToProject(activeProjectId, sessionId);
+        }
       }
 
       const userMessage: Message = {
@@ -218,6 +250,11 @@ export default function Home() {
       setIsLoading(true);
       if (inputRef.current) inputRef.current.style.height = 'auto';
 
+      // Build project context for AI
+      const projectContext = activeProject && activeProject.decisions.length > 0
+        ? buildProjectContext(activeProject)
+        : undefined;
+
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -229,6 +266,7 @@ export default function Home() {
               ...(m.image ? { image: m.image } : {}),
             })),
             mode,
+            projectContext,
           }),
         });
 
@@ -274,17 +312,17 @@ export default function Home() {
           }
         }
 
-        // Parse progress/construction from final content
+        // Parse and merge into project store
         if (mode === 'construction') {
           const { construction: parsed } = parseConstruction(assistantContent);
-          if (parsed) {
-            setConstruction(parsed);
+          if (parsed && activeProjectId) {
+            mergeConstruction(activeProjectId, parsed);
             if (!panelOpen) setPanelOpen(true);
           }
         } else {
           const { progress: parsed } = parseProgress(assistantContent);
-          if (parsed) {
-            setProgress(parsed);
+          if (parsed && activeProjectId) {
+            mergeProgress(activeProjectId, parsed);
             if (!panelOpen && parsed.decisions.length > 0) {
               setPanelOpen(true);
             }
@@ -316,16 +354,37 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [messages, isLoading, currentId, createSession, updateSession, pendingImage, panelOpen, mode]
+    [messages, isLoading, currentId, createSession, updateSession, pendingImage, panelOpen, mode, activeProjectId, activeProject, addSessionToProject, mergeProgress, mergeConstruction]
   );
+
+  const handleStartMode = (selectedMode: 'quest' | 'construction') => {
+    const name = selectedMode === 'quest' ? '我的装修方案' : '我的施工跟进';
+    const projectId = createProject(name, selectedMode);
+    setMode(selectedMode);
+
+    const sessionId = createSession(projectId,
+      selectedMode === 'quest' ? '基本信息' : '施工开始'
+    );
+    addSessionToProject(projectId, sessionId);
+
+    const firstMsg = selectedMode === 'quest' ? '开始装修闯关' : '开始施工跟进';
+    // Manually trigger because createSession sets currentId
+    // but sendMessage checks currentId which won't be updated yet
+    setTimeout(() => sendMessage(firstMsg), 50);
+  };
 
   const handleNewChat = () => {
     setMessages([]);
-    setProgress(null);
-    setConstruction(null);
+    setPanelOpen(false);
+    clearCurrent();
+  };
+
+  const handleNewProject = () => {
+    setMessages([]);
     setPanelOpen(false);
     setMode('quest');
     clearCurrent();
+    setActiveProjectId(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -356,19 +415,42 @@ export default function Home() {
   };
 
   const handleExportPdf = () => {
-    if (progress) exportDecisionsPdf(progress);
+    if (projectProgress) exportDecisionsPdf(projectProgress, activeProject?.name);
   };
+
+  // Get sessions for active project
+  const projectSessions = useMemo(() => {
+    if (!activeProjectId) return sessions;
+    return sessions.filter((s) => s.projectId === activeProjectId);
+  }, [sessions, activeProjectId]);
+
+  // Whether to show mode selection (no active project)
+  const showModeSelection = messages.length === 0 && !activeProjectId;
+  // Whether to show "new chat within project" welcome
+  const showProjectWelcome = messages.length === 0 && activeProjectId && !currentId;
 
   return (
     <div className="flex h-screen">
       <Sidebar
-        sessions={sessions}
+        sessions={projectSessions}
         currentId={currentId}
         onSelect={switchSession}
-        onNew={handleNewChat}
+        onNew={activeProjectId ? handleNewChat : handleNewProject}
         onDelete={deleteSession}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onSelectProject={(id) => {
+          setActiveProjectId(id);
+          const proj = projects.find((p) => p.id === id);
+          if (proj) setMode(proj.mode);
+          clearCurrent();
+          setMessages([]);
+        }}
+        onNewProject={handleNewProject}
+        onDeleteProject={deleteProject}
+        onRenameProject={renameProject}
       />
 
       <div className="flex-1 flex min-w-0">
@@ -385,14 +467,16 @@ export default function Home() {
             </button>
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-bold text-gray-900 truncate">
-                {mode === 'construction' ? '🔧 施工跟进' : '🏠 装修闯关'}
+                {activeProject
+                  ? `${mode === 'construction' ? '🔧' : '🏠'} ${activeProject.name}`
+                  : '🏠 AI 装修助手'}
               </h1>
               <p className="text-xs text-gray-500 truncate">
                 {mode === 'construction' ? '盯质量、控预算、管进度' : '一步步帮你搞定装修方案'}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {(progress || construction) && (
+              {(projectProgress || projectConstruction) && (
                 <button
                   onClick={() => setPanelOpen(!panelOpen)}
                   className={`px-3 py-1.5 text-sm rounded-lg hover:opacity-80 transition-colors border whitespace-nowrap ${
@@ -402,25 +486,22 @@ export default function Home() {
                   }`}
                 >
                   {mode === 'construction' ? '🔧 进度' : '📋 方案'}
-                  {mode === 'quest' && progress && progress.decisions.filter((d) => d.is_new).length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-orange-500 text-white text-[10px] rounded-full">
-                      {progress.decisions.filter((d) => d.is_new).length}
-                    </span>
-                  )}
                 </button>
               )}
-              <button
-                onClick={handleNewChat}
-                className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50
-                  rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 whitespace-nowrap"
-              >
-                ✨ 新对话
-              </button>
+              {activeProjectId && (
+                <button
+                  onClick={handleNewChat}
+                  className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50
+                    rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 whitespace-nowrap"
+                >
+                  ✨ 新对话
+                </button>
+              )}
             </div>
           </header>
 
           <div className="flex-1 overflow-y-auto chat-container px-4 py-6 space-y-4">
-            {messages.length === 0 ? (
+            {showModeSelection ? (
               <div className="flex flex-col items-center justify-center h-full">
                 <div className="text-6xl mb-4">🏠</div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -432,13 +513,10 @@ export default function Home() {
 
                 <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg px-4">
                   <button
-                    onClick={() => {
-                      setMode('quest');
-                      sendMessage('开始装修闯关');
-                    }}
+                    onClick={() => handleStartMode('quest')}
                     className="flex-1 p-5 bg-white border-2 border-orange-200 rounded-2xl
                       hover:border-orange-400 hover:shadow-lg hover:shadow-orange-100
-                      transition-all text-left group"
+                      transition-all text-left"
                   >
                     <div className="text-3xl mb-2">🎮</div>
                     <div className="font-bold text-gray-800 mb-1">装修闯关</div>
@@ -448,13 +526,10 @@ export default function Home() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      setMode('construction');
-                      sendMessage('开始施工跟进');
-                    }}
+                    onClick={() => handleStartMode('construction')}
                     className="flex-1 p-5 bg-white border-2 border-blue-200 rounded-2xl
                       hover:border-blue-400 hover:shadow-lg hover:shadow-blue-100
-                      transition-all text-left group"
+                      transition-all text-left"
                   >
                     <div className="text-3xl mb-2">🔧</div>
                     <div className="font-bold text-gray-800 mb-1">施工跟进</div>
@@ -463,6 +538,56 @@ export default function Home() {
                     </div>
                   </button>
                 </div>
+
+                {projects.length > 0 && (
+                  <div className="mt-8 text-center">
+                    <p className="text-xs text-gray-400 mb-2">或继续已有项目</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {projects.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setActiveProjectId(p.id);
+                            setMode(p.mode);
+                            clearCurrent();
+                            setMessages([]);
+                          }}
+                          className="px-3 py-1.5 text-sm bg-gray-50 border border-gray-200
+                            rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          {p.mode === 'construction' ? '🔧' : '🏠'} {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : showProjectWelcome ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-4xl mb-3">
+                  {mode === 'construction' ? '🔧' : '🏗️'}
+                </div>
+                <h3 className="text-lg font-bold text-gray-700 mb-2">
+                  {activeProject?.name}
+                </h3>
+                <p className="text-gray-400 text-sm mb-6 text-center max-w-sm">
+                  {projectProgress && projectProgress.decisions.length > 0
+                    ? `已有 ${projectProgress.decisions.filter(d => d.status === 'confirmed').length} 项决策，继续讨论新话题`
+                    : '开始新的对话，继续你的装修之旅'}
+                </p>
+                <button
+                  onClick={() => sendMessage(
+                    mode === 'construction' ? '继续施工跟进' : '继续装修闯关'
+                  )}
+                  className={`px-6 py-2.5 text-white rounded-xl text-sm font-medium
+                    transition-colors shadow-lg ${
+                    mode === 'construction'
+                      ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-200'
+                      : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'
+                  }`}
+                >
+                  💬 继续对话
+                </button>
               </div>
             ) : (
               displayMessages.map((msg, i) => (
@@ -615,22 +740,22 @@ export default function Home() {
             </div>
             <p className="text-xs text-gray-400 text-center mt-2">
               {mode === 'construction'
-                ? '告诉我施工进展 · 拍照给我看现场 · 说“通过”进入下一阶段'
-                : '输入“跳过”跳过当前问题 · 输入“导出”生成方案文档 · 支持上传效果图'}
+                ? '告诉我施工进展 · 拍照给我看现场 · 说"通过"进入下一阶段'
+                : '输入"跳过"跳过当前问题 · 输入"导出"生成方案文档 · 支持上传效果图'}
             </p>
           </div>
         </div>
 
-        {/* Side Panel */}
+        {/* Side Panel — reads from project-level data */}
         {mode === 'construction' ? (
           <ConstructionPanel
-            data={construction}
+            data={projectConstruction}
             isOpen={panelOpen}
             onClose={() => setPanelOpen(false)}
           />
         ) : (
           <DecisionPanel
-            progress={progress}
+            progress={projectProgress}
             onDiscussItem={handleDiscussItem}
             onExportPdf={handleExportPdf}
             isOpen={panelOpen}

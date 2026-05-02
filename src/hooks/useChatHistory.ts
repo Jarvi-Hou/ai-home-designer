@@ -8,6 +8,8 @@ export interface ChatSession {
   messages: { role: 'user' | 'assistant'; content: string; image?: string }[];
   createdAt: number;
   updatedAt: number;
+  projectId?: string;
+  tag?: string;
 }
 
 const STORAGE_KEY = 'ai-home-designer-history';
@@ -34,34 +36,37 @@ export function useChatHistory() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
 
-  // 初始化加载
   useEffect(() => {
     setSessions(loadSessions());
   }, []);
 
   const currentSession = sessions.find((s) => s.id === currentId) || null;
 
-  const createSession = useCallback(() => {
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const session: ChatSession = {
-      id,
-      title: '新对话',
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    const updated = [session, ...sessions];
-    setSessions(updated);
-    saveSessions(updated);
-    setCurrentId(id);
-    return id;
-  }, [sessions]);
+  const createSession = useCallback(
+    (projectId?: string, tag?: string) => {
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const session: ChatSession = {
+        id,
+        title: '新对话',
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        projectId,
+        tag,
+      };
+      const updated = [session, ...sessions];
+      setSessions(updated);
+      saveSessions(updated);
+      setCurrentId(id);
+      return id;
+    },
+    [sessions]
+  );
 
   const updateSession = useCallback(
     (id: string, messages: ChatSession['messages']) => {
       const updated = sessions.map((s) => {
         if (s.id !== id) return s;
-        // 用第一条用户消息做标题
         const firstUser = messages.find((m) => m.role === 'user');
         const title = firstUser
           ? firstUser.content.slice(0, 20) + (firstUser.content.length > 20 ? '...' : '')
@@ -92,6 +97,13 @@ export function useChatHistory() {
     setCurrentId(null);
   }, []);
 
+  const getSessionsByProject = useCallback(
+    (projectId: string) => {
+      return sessions.filter((s) => s.projectId === projectId);
+    },
+    [sessions]
+  );
+
   return {
     sessions,
     currentId,
@@ -101,5 +113,6 @@ export function useChatHistory() {
     deleteSession,
     switchSession,
     clearCurrent,
+    getSessionsByProject,
   };
 }

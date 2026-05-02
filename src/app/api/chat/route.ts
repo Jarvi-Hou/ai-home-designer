@@ -43,8 +43,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { messages, mode } = await req.json();
-  const systemPrompt = mode === 'construction' ? CONSTRUCTION_PROMPT : SYSTEM_PROMPT;
+  const { messages, mode, projectContext } = await req.json();
+  const basePrompt = mode === 'construction' ? CONSTRUCTION_PROMPT : SYSTEM_PROMPT;
+  const systemPrompt = projectContext ? `${projectContext}\n\n${basePrompt}` : basePrompt;
 
   // 智能上下文管理：超过 16 条时，将早期消息压缩为摘要
   const allMessages = messages.map(
