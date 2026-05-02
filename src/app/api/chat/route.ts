@@ -1,8 +1,51 @@
 import { NextRequest } from 'next/server';
 import { SYSTEM_PROMPT } from '@/lib/prompts';
 
+// 简单的内存速率限制：每个 IP 每分钟最多 10 次请求
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 10; // 每分钟最大请求数
+const RATE_WINDOW = 60 * 1000; // 1 分钟
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+
+  if (!record || now > record.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
+    return true;
+  }
+
+  if (record.count >= RATE_LIMIT) return false;
+  record.count++;
+  return true;
+}
+
+// 定期清理过期记录
+setInterval(() => {
+  const now = Date.now();
+  rateLimitMap.forEach((val, key) => {
+    if (now > val.resetAt) rateLimitMap.delete(key);
+  });
+}, 60 * 1000);
+
 export async function POST(req: NextRequest) {
+  // 速率限制
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown';
+
+  if (!checkRateLimit(ip)) {
+    return new Response(
+      JSON.stringify({ error: '请求太频繁，请稍后再试（每分钟限 10 次）' }),
+      { status: 429, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   const { messages } = await req.json();
+
+  // 限制对话轮数，防止恶意消耗 token
+  const trimmedMessages = messages.slice(-20);
 
   const apiKey = process.env.MIMO_API_KEY;
   const apiBase = process.env.MIMO_API_BASE || 'https://token-plan-cn.xiaomimimo.com/v1';
@@ -23,8 +66,9 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages],
       stream: true,
+      max_tokens: 2000, // 限制单次回复长度
     }),
   });
 
