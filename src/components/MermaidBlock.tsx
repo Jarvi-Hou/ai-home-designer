@@ -32,6 +32,27 @@ mermaid.initialize({
 
 let mermaidId = 0;
 
+function sanitizeGantt(raw: string): string {
+  const lines = raw.split('\n');
+  const out: string[] = [];
+  for (const line of lines) {
+    let l = line;
+    l = l.replace(/\b(active|done|crit)\s*,\s*/g, '');
+    l = l.replace(/：/g, ':');
+    l = l.replace(/,\s*$/, '');
+    out.push(l);
+  }
+  return out.join('\n');
+}
+
+function sanitizeMermaid(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('gantt')) {
+    return sanitizeGantt(trimmed);
+  }
+  return trimmed;
+}
+
 export default function MermaidBlock({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
@@ -40,9 +61,10 @@ export default function MermaidBlock({ code }: { code: string }) {
   useEffect(() => {
     const id = `mermaid-${++mermaidId}`;
     let cancelled = false;
+    const sanitized = sanitizeMermaid(code);
 
     mermaid
-      .render(id, code.trim())
+      .render(id, sanitized)
       .then(({ svg: renderedSvg }) => {
         if (!cancelled) setSvg(renderedSvg);
       })
