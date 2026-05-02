@@ -45,7 +45,20 @@ export async function POST(req: NextRequest) {
   const { messages } = await req.json();
 
   // 限制对话轮数，防止恶意消耗 token
-  const trimmedMessages = messages.slice(-20);
+  const trimmedMessages = messages.slice(-20).map(
+    (m: { role: string; content: string; image?: string }) => {
+      if (m.image) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'image_url', image_url: { url: m.image } },
+            { type: 'text', text: m.content || '请分析这张装修效果图' },
+          ],
+        };
+      }
+      return { role: m.role, content: m.content };
+    }
+  );
 
   const apiKey = process.env.MIMO_API_KEY;
   const apiBase = process.env.MIMO_API_BASE || 'https://token-plan-cn.xiaomimimo.com/v1';

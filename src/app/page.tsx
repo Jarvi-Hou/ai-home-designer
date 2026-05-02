@@ -8,6 +8,34 @@ import { useChatHistory } from '@/hooks/useChatHistory';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  image?: string;
+}
+
+function compressImage(file: File, maxSize = 1024): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function exportChat(messages: Message[]) {
@@ -41,8 +69,10 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     sessions,
@@ -67,19 +97,23 @@ export default function Home() {
   }, [currentId, sessions]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
-      if (!content.trim() || isLoading) return;
+    async (content: string, image?: string | null) => {
+      if ((!content.trim() && !image) || isLoading) return;
 
-      // 如果没有当前会话，先创建一个
       let sessionId = currentId;
       if (!sessionId) {
         sessionId = createSession();
       }
 
-      const userMessage: Message = { role: 'user', content: content.trim() };
+      const userMessage: Message = {
+        role: 'user',
+        content: content.trim() || (image ? '请帮我分析这张装修效果图' : ''),
+        ...(image ? { image } : {}),
+      };
       const newMessages = [...messages, userMessage];
       setMessages(newMessages);
       setInput('');
+      setPendingImage(null);
       setIsLoading(true);
 
       try {
@@ -162,7 +196,7 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [messages, isLoading, currentId, createSession, updateSession]
+    [messages, isLoading, currentId, createSession, updateSession, pendingImage]
   );
 
   const handleNewChat = () => {
@@ -173,8 +207,24 @@ export default function Home() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(input);
+      sendMessage(input, pendingImage);
     }
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('图片不能超过 10MB');
+      return;
+    }
+    try {
+      const compressed = await compressImage(file);
+      setPendingImage(compressed);
+    } catch {
+      alert('图片处理失败，请换一张试试');
+    }
+    e.target.value = '';
   };
 
   return (
@@ -272,6 +322,13 @@ export default function Home() {
                       : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-md'
                   }`}
                 >
+                  {msg.image && (
+                    <img
+                      src={msg.image}
+                      alt="上传的图片"
+                      className="max-w-full rounded-lg mb-2 max-h-60 object-cover"
+                    />
+                  )}
                   {msg.role === 'assistant' ? (
                     <div
                       className={`prose-chat text-[15px] leading-relaxed whitespace-pre-wrap ${
@@ -283,9 +340,11 @@ export default function Home() {
                       {msg.content || '思考中...'}
                     </div>
                   ) : (
-                    <div className="text-[15px] leading-relaxed">
-                      {msg.content}
-                    </div>
+                    msg.content && (
+                      <div className="text-[15px] leading-relaxed">
+                        {msg.content}
+                      </div>
+                    )
                   )}
                 </div>
               </div>
@@ -296,31 +355,69 @@ export default function Home() {
 
         {/* 输入区域 */}
         <div className="border-t border-gray-200 bg-white px-4 py-3">
-          <div className="flex gap-2 max-w-3xl mx-auto">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="描述你的装修需求...（Enter 发送，Shift+Enter 换行）"
-              rows={1}
-              className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5
-                text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent
-                placeholder:text-gray-400"
-              disabled={isLoading}
-            />
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || isLoading}
-              className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium
-                hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed
-                transition-colors shrink-0"
-            >
-              {isLoading ? '回复中...' : '发送'}
-            </button>
+          <div className="max-w-3xl mx-auto">
+            {pendingImage && (
+              <div className="relative inline-block mb-2">
+                <img
+                  src={pendingImage}
+                  alt="待发送图片"
+                  className="h-20 rounded-lg border border-gray-200"
+                />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-gray-600 text-white
+                    rounded-full text-xs flex items-center justify-center hover:bg-gray-800"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
+                className="p-2.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50
+                  rounded-xl transition-colors shrink-0 disabled:opacity-40"
+                title="上传效果图"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="M21 15l-5-5L5 21" />
+                </svg>
+              </button>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={pendingImage ? "描述你想了解的内容（可直接发送）..." : "描述你的装修需求...（Enter 发送，Shift+Enter 换行）"}
+                rows={1}
+                className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5
+                  text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent
+                  placeholder:text-gray-400"
+                disabled={isLoading}
+              />
+              <button
+                onClick={() => sendMessage(input, pendingImage)}
+                disabled={(!input.trim() && !pendingImage) || isLoading}
+                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium
+                  hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed
+                  transition-colors shrink-0"
+              >
+                {isLoading ? '回复中...' : '发送'}
+              </button>
+            </div>
           </div>
           <p className="text-xs text-gray-400 text-center mt-2">
-            AI 建议仅供参考，具体方案请以实际情况为准
+            AI 建议仅供参考，具体方案请以实际情况为准 · 支持上传效果图分析
           </p>
         </div>
       </div>

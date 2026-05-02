@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 export interface ChatSession {
   id: string;
   title: string;
-  messages: { role: 'user' | 'assistant'; content: string }[];
+  messages: { role: 'user' | 'assistant'; content: string; image?: string }[];
   createdAt: number;
   updatedAt: number;
 }
