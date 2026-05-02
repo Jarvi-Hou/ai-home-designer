@@ -355,8 +355,16 @@ export default function Home() {
                           components={{
                             code({ className, children }) {
                               const match = /language-mermaid/.exec(className || '');
-                              if (match) {
+                              const isStreamingThis = isLoading && i === messages.length - 1;
+                              if (match && !isStreamingThis) {
                                 return <MermaidBlock code={String(children).replace(/\n$/, '')} />;
+                              }
+                              if (match) {
+                                return (
+                                  <pre className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 overflow-x-auto">
+                                    <code>{children}</code>
+                                  </pre>
+                                );
                               }
                               return (
                                 <code className={`${className || ''} bg-gray-100 px-1.5 py-0.5 rounded text-sm`}>
