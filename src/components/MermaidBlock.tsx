@@ -39,6 +39,7 @@ function sanitizeGantt(raw: string): string {
     let l = line;
     l = l.replace(/\b(active|done|crit)\s*,\s*/g, '');
     l = l.replace(/：/g, ':');
+    l = l.replace(/[−–—]/g, '-');
     l = l.replace(/,\s*$/, '');
     out.push(l);
   }
