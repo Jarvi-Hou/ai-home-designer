@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       model,
       messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages],
       stream: true,
-      max_tokens: 2000, // 限制单次回复长度
+      max_tokens: 8000, // 装修建议内容较长，给足空间
     }),
   });
 
