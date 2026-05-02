@@ -45,12 +45,37 @@ function sanitizeGantt(raw: string): string {
   return out.join('\n');
 }
 
+function sanitizePie(raw: string): string {
+  const lines = raw.split('\n');
+  const out: string[] = [];
+  for (const line of lines) {
+    let l = line;
+    // Remove parentheses content from title line
+    if (l.match(/^\s*pie\s+title/)) {
+      l = l.replace(/[（(][^）)]*[）)]/g, '').replace(/\s+/g, ' ').trim();
+    }
+    // Remove parentheses content inside quoted labels
+    l = l.replace(/"([^"]*)[（(][^）)]*[）)]([^"]*)"/g, '"$1$2"');
+    // Fix Chinese colons
+    l = l.replace(/：/g, ':');
+    out.push(l);
+  }
+  return out.join('\n');
+}
+
 function sanitizeMermaid(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('gantt')) {
     return sanitizeGantt(trimmed);
   }
+  if (trimmed.startsWith('pie')) {
+    return sanitizePie(trimmed);
+  }
   return trimmed;
+}
+
+function cleanupMermaidErrors() {
+  document.querySelectorAll('[id^="dmermaid-"]').forEach((el) => el.remove());
 }
 
 export default function MermaidBlock({ code }: { code: string }) {
@@ -69,11 +94,13 @@ export default function MermaidBlock({ code }: { code: string }) {
         if (!cancelled) setSvg(renderedSvg);
       })
       .catch((err) => {
+        cleanupMermaidErrors();
         if (!cancelled) setError(err?.message || '图表渲染失败');
       });
 
     return () => {
       cancelled = true;
+      cleanupMermaidErrors();
     };
   }, [code]);
 
