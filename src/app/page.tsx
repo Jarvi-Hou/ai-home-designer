@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
-import BudgetCalculator from '@/components/BudgetCalculator';
-import RenovationJourney from '@/components/RenovationJourney';
+import DecisionPanel from '@/components/DecisionPanel';
+import { parseProgress } from '@/lib/parseProgress';
+import { ProgressData, Decision } from '@/lib/progressTypes';
 
 const MermaidBlock = dynamic(() => import('@/components/MermaidBlock'), {
   ssr: false,
@@ -47,38 +48,96 @@ function compressImage(file: File, maxSize = 1024): Promise<string> {
   });
 }
 
-function exportChat(messages: Message[]) {
+function exportDecisionsPdf(progress: ProgressData) {
+  const confirmed = progress.decisions.filter((d) => d.status === 'confirmed');
+  const pending = progress.decisions.filter((d) => d.status !== 'confirmed');
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  let text = `# AI 家居设计师 - 对话记录\n\n导出时间：${now.toLocaleString('zh-CN')}\n\n---\n\n`;
-  for (const msg of messages) {
-    const label = msg.role === 'user' ? '🙋 我' : '🏠 AI 设计师';
-    text += `### ${label}\n\n${msg.content}\n\n---\n\n`;
-  }
-  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `装修方案-${dateStr}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
-const QUICK_QUESTIONS = [
-  '🏠 90平三室一厅，预算15万，推荐什么风格？',
-  '💰 帮我做一份装修预算清单',
-  '🔧 全包和半包怎么选？',
-  '🎨 现在最流行什么装修风格？',
-  '⚠️ 装修有哪些常见的坑？',
-  '🧱 瓷砖怎么挑选不踩雷？',
-];
+  const formatMoney = (n: number | null) => {
+    if (n === null) return '待定';
+    if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+    return `${n}元`;
+  };
+
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>装修方案 - ${dateStr}</title>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #333; }
+  h1 { color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 8px; }
+  h2 { color: #444; margin-top: 30px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #f8f8f8; }
+  .summary { display: flex; gap: 20px; margin: 16px 0; }
+  .summary-card { flex: 1; background: #fff7ed; border-radius: 8px; padding: 16px; text-align: center; }
+  .summary-card .label { font-size: 12px; color: #888; }
+  .summary-card .value { font-size: 20px; font-weight: bold; color: #ea580c; margin-top: 4px; }
+  .pending { color: #999; font-style: italic; }
+  .footer { margin-top: 40px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
+</style></head><body>
+<h1>🏠 装修需求方案</h1>
+<p>生成时间：${now.toLocaleString('zh-CN')}</p>
+
+<div class="summary">
+  <div class="summary-card">
+    <div class="label">总预算</div>
+    <div class="value">${formatMoney(progress.budget.total)}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">已分配</div>
+    <div class="value">${formatMoney(progress.budget.allocated)}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">时间线</div>
+    <div class="value" style="font-size:16px">${
+      progress.timeline.start && progress.timeline.end
+        ? `${progress.timeline.start} → ${progress.timeline.end}`
+        : '待确定'
+    }</div>
+  </div>
+</div>
+
+<h2>✅ 已确定项目</h2>
+<table>
+  <tr><th>项目</th><th>分类</th><th>决策</th><th>预估费用</th></tr>
+  ${confirmed.map((d) => `<tr>
+    <td>${d.label}</td><td>${d.category}</td>
+    <td>${d.value || '—'}</td><td>${formatMoney(d.estimated_cost)}</td>
+  </tr>`).join('')}
+</table>`;
+
+  if (pending.length > 0) {
+    html += `<h2>⏳ 待定项目</h2>
+<table>
+  <tr><th>项目</th><th>分类</th><th>状态</th></tr>
+  ${pending.map((d) => `<tr>
+    <td>${d.label}</td><td>${d.category}</td>
+    <td class="pending">${d.status === 'revisiting' ? '修改中' : '待定'}</td>
+  </tr>`).join('')}
+</table>`;
+  }
+
+  html += `<div class="footer">
+  由 AI 家居设计师 生成 · 请将此文档交给装修公司作为报价参考
+</div></body></html>`;
+
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  }
+}
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ProgressData | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,13 +156,30 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 切换对话时加载消息
+  // Restore progress when switching sessions
   useEffect(() => {
     const session = sessions.find((s) => s.id === currentId);
     if (session) {
       setMessages(session.messages);
+      const lastAssistant = [...session.messages].reverse().find((m) => m.role === 'assistant');
+      if (lastAssistant) {
+        const { progress: restored } = parseProgress(lastAssistant.content);
+        setProgress(restored);
+      } else {
+        setProgress(null);
+      }
     }
   }, [currentId, sessions]);
+
+  const displayMessages = useMemo(() => {
+    return messages.map((msg) => {
+      if (msg.role === 'assistant' && msg.content) {
+        const { displayContent } = parseProgress(msg.content);
+        return { ...msg, content: displayContent };
+      }
+      return msg;
+    });
+  }, [messages]);
 
   const sendMessage = useCallback(
     async (content: string, image?: string | null) => {
@@ -176,12 +252,20 @@ export default function Home() {
               ];
               setMessages(updated);
             } catch {
-              // 跳过
+              // skip
             }
           }
         }
 
-        // 保存到历史
+        // Parse progress from final content
+        const { progress: parsed } = parseProgress(assistantContent);
+        if (parsed) {
+          setProgress(parsed);
+          if (!panelOpen && parsed.decisions.length > 0) {
+            setPanelOpen(true);
+          }
+        }
+
         const finalMessages = [
           ...newMessages,
           { role: 'assistant' as const, content: assistantContent },
@@ -207,11 +291,13 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [messages, isLoading, currentId, createSession, updateSession, pendingImage]
+    [messages, isLoading, currentId, createSession, updateSession, pendingImage, panelOpen]
   );
 
   const handleNewChat = () => {
     setMessages([]);
+    setProgress(null);
+    setPanelOpen(false);
     clearCurrent();
   };
 
@@ -238,9 +324,16 @@ export default function Home() {
     e.target.value = '';
   };
 
+  const handleDiscussItem = (decision: Decision) => {
+    sendMessage(`我想修改关于「${decision.label}」的决定`);
+  };
+
+  const handleExportPdf = () => {
+    if (progress) exportDecisionsPdf(progress);
+  };
+
   return (
     <div className="flex h-screen">
-      {/* 侧边栏 */}
       <Sidebar
         sessions={sessions}
         currentId={currentId}
@@ -251,228 +344,232 @@ export default function Home() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* 主区域 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* 顶部 */}
-        <header className="px-4 py-3 border-b border-gray-200 bg-white flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 shrink-0"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h18M3 6h18M3 18h18" />
-            </svg>
-          </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold text-gray-900 truncate">🏠 AI 家居设计师</h1>
-            <p className="text-xs text-gray-500 truncate">基于小米 MiMo · 专业装修顾问</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {messages.length > 0 && (
+      <div className="flex-1 flex min-w-0">
+        {/* Main chat area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="px-4 py-3 border-b border-gray-200 bg-white flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 shrink-0"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12h18M3 6h18M3 18h18" />
+              </svg>
+            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-bold text-gray-900 truncate">🏠 装修闯关</h1>
+              <p className="text-xs text-gray-500 truncate">一步步帮你搞定装修方案</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {progress && (
+                <button
+                  onClick={() => setPanelOpen(!panelOpen)}
+                  className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50
+                    rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 whitespace-nowrap"
+                >
+                  📋 方案
+                  {progress.decisions.filter((d) => d.is_new).length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-orange-500 text-white text-[10px] rounded-full">
+                      {progress.decisions.filter((d) => d.is_new).length}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
-                onClick={() => exportChat(messages)}
+                onClick={handleNewChat}
                 className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50
                   rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 whitespace-nowrap"
               >
-                📥 导出
+                ✨ 新对话
               </button>
-            )}
-            <button
-              onClick={handleNewChat}
-              className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50
-                rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 whitespace-nowrap"
-            >
-              ✨ 新对话
-            </button>
-          </div>
-        </header>
-
-        {/* 聊天区域 */}
-        <div className="flex-1 overflow-y-auto chat-container px-4 py-6 space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="text-6xl mb-4">🏡</div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                你好，我是你的 AI 装修顾问
-              </h2>
-              <p className="text-gray-500 mb-6 text-center max-w-md">
-                15 年装修经验，帮你规划预算、推荐风格、选择材料、避开装修坑
-              </p>
-
-              {/* 工具入口 */}
-              <div className="w-full max-w-lg mb-6 flex flex-wrap gap-3">
-                <BudgetCalculator onAsk={sendMessage} />
-                <RenovationJourney onAsk={sendMessage} />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
-                {QUICK_QUESTIONS.map((q, i) => (
-                  <button
-                    key={i}
-                    onClick={() => sendMessage(q)}
-                    className="text-left px-4 py-3 rounded-xl border border-gray-200
-                      bg-white hover:bg-orange-50 hover:border-orange-300
-                      transition-all text-sm text-gray-700 shadow-sm"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
             </div>
-          ) : (
-            messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`message-bubble flex ${
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
-                  className={`max-w-[85%] px-4 py-3 rounded-2xl ${
-                    msg.role === 'user'
-                      ? 'bg-orange-500 text-white rounded-br-md'
-                      : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-md'
-                  }`}
-                >
-                  {msg.image && (
-                    <img
-                      src={msg.image}
-                      alt="上传的图片"
-                      className="max-w-full rounded-lg mb-2 max-h-60 object-cover"
-                    />
-                  )}
-                  {msg.role === 'assistant' ? (
-                    <div
-                      className={`prose-chat text-[15px] leading-relaxed ${
-                        isLoading && i === messages.length - 1
-                          ? 'typing-cursor'
-                          : ''
-                      }`}
-                    >
-                      {msg.content ? (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({ className, children }) {
-                              const match = /language-mermaid/.exec(className || '');
-                              const isStreamingThis = isLoading && i === messages.length - 1;
-                              if (match && !isStreamingThis) {
-                                return <MermaidBlock code={String(children).replace(/\n$/, '')} />;
-                              }
-                              if (match) {
-                                return (
-                                  <pre className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 overflow-x-auto">
-                                    <code>{children}</code>
-                                  </pre>
-                                );
-                              }
-                              return (
-                                <code className={`${className || ''} bg-gray-100 px-1.5 py-0.5 rounded text-sm`}>
-                                  {children}
-                                </code>
-                              );
-                            },
-                            pre({ children }) {
-                              return <>{children}</>;
-                            },
-                          }}
-                        >
-                          {msg.content}
-                        </ReactMarkdown>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-gray-400">
-                          <span className="thinking-dot" />
-                          <span className="thinking-dot [animation-delay:0.2s]" />
-                          <span className="thinking-dot [animation-delay:0.4s]" />
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    msg.content && (
-                      <div className="text-[15px] leading-relaxed">
-                        {msg.content}
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-          <div ref={chatEndRef} />
-        </div>
+          </header>
 
-        {/* 输入区域 */}
-        <div className="border-t border-gray-200 bg-white px-4 py-3">
-          <div className="max-w-3xl mx-auto">
-            {pendingImage && (
-              <div className="relative inline-block mb-2">
-                <img
-                  src={pendingImage}
-                  alt="待发送图片"
-                  className="h-20 rounded-lg border border-gray-200"
-                />
+          <div className="flex-1 overflow-y-auto chat-container px-4 py-6 space-y-4">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-6xl mb-4">🏗️</div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                  装修闯关模式
+                </h2>
+                <p className="text-gray-500 mb-2 text-center max-w-md">
+                  像玩游戏一样，一步步做出装修决策
+                </p>
+                <p className="text-gray-400 mb-8 text-center max-w-md text-sm">
+                  走完全部关卡 → 导出一份装修方案 → 拿给装修公司报价
+                </p>
+
                 <button
-                  onClick={() => setPendingImage(null)}
-                  className="absolute -top-2 -right-2 w-5 h-5 bg-gray-600 text-white
-                    rounded-full text-xs flex items-center justify-center hover:bg-gray-800"
+                  onClick={() => sendMessage('开始装修闯关')}
+                  className="px-8 py-3 bg-orange-500 text-white rounded-2xl text-base font-medium
+                    hover:bg-orange-600 transition-colors shadow-lg shadow-orange-200"
                 >
-                  ×
+                  🎮 开始闯关
                 </button>
               </div>
+            ) : (
+              displayMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`message-bubble flex ${
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[85%] px-4 py-3 rounded-2xl ${
+                      msg.role === 'user'
+                        ? 'bg-orange-500 text-white rounded-br-md'
+                        : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-md'
+                    }`}
+                  >
+                    {msg.image && (
+                      <img
+                        src={msg.image}
+                        alt="上传的图片"
+                        className="max-w-full rounded-lg mb-2 max-h-60 object-cover"
+                      />
+                    )}
+                    {msg.role === 'assistant' ? (
+                      <div
+                        className={`prose-chat text-[15px] leading-relaxed ${
+                          isLoading && i === displayMessages.length - 1
+                            ? 'typing-cursor'
+                            : ''
+                        }`}
+                      >
+                        {msg.content ? (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ className, children }) {
+                                const match = /language-mermaid/.exec(className || '');
+                                const isStreamingThis = isLoading && i === displayMessages.length - 1;
+                                if (match && !isStreamingThis) {
+                                  return <MermaidBlock code={String(children).replace(/\n$/, '')} />;
+                                }
+                                if (match) {
+                                  return (
+                                    <pre className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 overflow-x-auto">
+                                      <code>{children}</code>
+                                    </pre>
+                                  );
+                                }
+                                return (
+                                  <code className={`${className || ''} bg-gray-100 px-1.5 py-0.5 rounded text-sm`}>
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              pre({ children }) {
+                                return <>{children}</>;
+                              },
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-gray-400">
+                            <span className="thinking-dot" />
+                            <span className="thinking-dot [animation-delay:0.2s]" />
+                            <span className="thinking-dot [animation-delay:0.4s]" />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      msg.content && (
+                        <div className="text-[15px] leading-relaxed">
+                          {msg.content}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              ))
             )}
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-                className="p-2.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50
-                  rounded-xl transition-colors shrink-0 disabled:opacity-40"
-                title="上传效果图"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-              </button>
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  const el = e.target;
-                  el.style.height = 'auto';
-                  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder={pendingImage ? "描述你想了解的内容（可直接发送）..." : "描述你的装修需求...（Enter 发送，Shift+Enter 换行）"}
-                rows={1}
-                className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5
-                  text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent
-                  placeholder:text-gray-400"
-                disabled={isLoading}
-              />
-              <button
-                onClick={() => sendMessage(input, pendingImage)}
-                disabled={(!input.trim() && !pendingImage) || isLoading}
-                className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium
-                  hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed
-                  transition-colors shrink-0"
-              >
-                {isLoading ? '回复中...' : '发送'}
-              </button>
-            </div>
+            <div ref={chatEndRef} />
           </div>
-          <p className="text-xs text-gray-400 text-center mt-2">
-            AI 建议仅供参考，具体方案请以实际情况为准 · 支持上传效果图分析
-          </p>
+
+          <div className="border-t border-gray-200 bg-white px-4 py-3">
+            <div className="max-w-3xl mx-auto">
+              {pendingImage && (
+                <div className="relative inline-block mb-2">
+                  <img
+                    src={pendingImage}
+                    alt="待发送图片"
+                    className="h-20 rounded-lg border border-gray-200"
+                  />
+                  <button
+                    onClick={() => setPendingImage(null)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-gray-600 text-white
+                      rounded-full text-xs flex items-center justify-center hover:bg-gray-800"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                  className="p-2.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50
+                    rounded-xl transition-colors shrink-0 disabled:opacity-40"
+                  title="上传效果图"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                </button>
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    const el = e.target;
+                    el.style.height = 'auto';
+                    el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="回答问题、输入你的选择...（Enter 发送）"
+                  rows={1}
+                  className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5
+                    text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent
+                    placeholder:text-gray-400"
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={() => sendMessage(input, pendingImage)}
+                  disabled={(!input.trim() && !pendingImage) || isLoading}
+                  className="px-5 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium
+                    hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed
+                    transition-colors shrink-0"
+                >
+                  {isLoading ? '回复中...' : '发送'}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 text-center mt-2">
+              输入&ldquo;跳过&rdquo;跳过当前问题 · 输入&ldquo;导出&rdquo;生成方案文档 · 支持上传效果图
+            </p>
+          </div>
         </div>
+
+        {/* Decision Panel */}
+        <DecisionPanel
+          progress={progress}
+          onDiscussItem={handleDiscussItem}
+          onExportPdf={handleExportPdf}
+          isOpen={panelOpen}
+          onClose={() => setPanelOpen(false)}
+        />
       </div>
     </div>
   );
