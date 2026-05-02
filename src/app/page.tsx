@@ -10,6 +10,23 @@ interface Message {
   content: string;
 }
 
+function exportChat(messages: Message[]) {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let text = `# AI 家居设计师 - 对话记录\n\n导出时间：${now.toLocaleString('zh-CN')}\n\n---\n\n`;
+  for (const msg of messages) {
+    const label = msg.role === 'user' ? '🙋 我' : '🏠 AI 设计师';
+    text += `### ${label}\n\n${msg.content}\n\n---\n\n`;
+  }
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `装修方案-${dateStr}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const QUICK_QUESTIONS = [
   '🏠 90平三室一厅，预算15万，推荐什么风格？',
   '💰 帮我做一份装修预算清单',
@@ -189,13 +206,24 @@ export default function Home() {
             <h1 className="text-lg font-bold text-gray-900 truncate">🏠 AI 家居设计师</h1>
             <p className="text-xs text-gray-500 truncate">基于小米 MiMo · 专业装修顾问</p>
           </div>
-          <button
-            onClick={handleNewChat}
-            className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50
-              rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 shrink-0 whitespace-nowrap"
-          >
-            ✨ 新对话
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {messages.length > 0 && (
+              <button
+                onClick={() => exportChat(messages)}
+                className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50
+                  rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 whitespace-nowrap"
+              >
+                📥 导出
+              </button>
+            )}
+            <button
+              onClick={handleNewChat}
+              className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50
+                rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 whitespace-nowrap"
+            >
+              ✨ 新对话
+            </button>
+          </div>
         </header>
 
         {/* 聊天区域 */}
