@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import Sidebar from '@/components/Sidebar';
 import BudgetCalculator from '@/components/BudgetCalculator';
 import { useChatHistory } from '@/hooks/useChatHistory';
@@ -115,6 +117,7 @@ export default function Home() {
       setInput('');
       setPendingImage(null);
       setIsLoading(true);
+      if (inputRef.current) inputRef.current.style.height = 'auto';
 
       try {
         const response = await fetch('/api/chat', {
@@ -124,6 +127,7 @@ export default function Home() {
             messages: newMessages.map((m) => ({
               role: m.role,
               content: m.content,
+              ...(m.image ? { image: m.image } : {}),
             })),
           }),
         });
@@ -331,13 +335,23 @@ export default function Home() {
                   )}
                   {msg.role === 'assistant' ? (
                     <div
-                      className={`prose-chat text-[15px] leading-relaxed whitespace-pre-wrap ${
+                      className={`prose-chat text-[15px] leading-relaxed ${
                         isLoading && i === messages.length - 1
                           ? 'typing-cursor'
                           : ''
                       }`}
                     >
-                      {msg.content || '思考中...'}
+                      {msg.content ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-gray-400">
+                          <span className="thinking-dot" />
+                          <span className="thinking-dot [animation-delay:0.2s]" />
+                          <span className="thinking-dot [animation-delay:0.4s]" />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     msg.content && (
@@ -396,7 +410,12 @@ export default function Home() {
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={pendingImage ? "描述你想了解的内容（可直接发送）..." : "描述你的装修需求...（Enter 发送，Shift+Enter 换行）"}
                 rows={1}

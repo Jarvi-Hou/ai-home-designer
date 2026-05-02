@@ -59,6 +59,20 @@ body {
   margin-left: 1px;
 }
 
+/* 思考中动画 */
+@keyframes thinking {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+.thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f97316;
+  animation: thinking 1.4s infinite ease-in-out;
+}
+
 /* Markdown 样式 */
 .prose-chat ul {
   list-style-type: disc;
