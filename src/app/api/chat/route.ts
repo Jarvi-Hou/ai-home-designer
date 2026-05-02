@@ -62,7 +62,10 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.MIMO_API_KEY;
   const apiBase = process.env.MIMO_API_BASE || 'https://token-plan-cn.xiaomimimo.com/v1';
-  const model = process.env.MIMO_MODEL || 'mimo-v2.5-pro';
+  const textModel = process.env.MIMO_MODEL || 'mimo-v2.5-pro';
+  const visionModel = process.env.MIMO_VISION_MODEL || 'mimo-v2.5';
+  const hasImage = messages.some((m: { image?: string }) => m.image);
+  const model = hasImage ? visionModel : textModel;
 
   if (!apiKey) {
     return new Response(JSON.stringify({ error: '未配置 MIMO_API_KEY' }), {
