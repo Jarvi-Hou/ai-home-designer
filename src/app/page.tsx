@@ -3,8 +3,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import BudgetCalculator from '@/components/BudgetCalculator';
+import RenovationJourney from '@/components/RenovationJourney';
+
+const MermaidBlock = dynamic(() => import('@/components/MermaidBlock'), {
+  ssr: false,
+  loading: () => <div className="text-sm text-gray-400 py-4">图表加载中...</div>,
+});
 import { useChatHistory } from '@/hooks/useChatHistory';
 
 interface Message {
@@ -292,9 +299,10 @@ export default function Home() {
                 15 年装修经验，帮你规划预算、推荐风格、选择材料、避开装修坑
               </p>
 
-              {/* 预算计算器 */}
-              <div className="w-full max-w-lg mb-6">
+              {/* 工具入口 */}
+              <div className="w-full max-w-lg mb-6 flex flex-wrap gap-3">
                 <BudgetCalculator onAsk={sendMessage} />
+                <RenovationJourney onAsk={sendMessage} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
@@ -342,7 +350,25 @@ export default function Home() {
                       }`}
                     >
                       {msg.content ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code({ className, children }) {
+                              const match = /language-mermaid/.exec(className || '');
+                              if (match) {
+                                return <MermaidBlock code={String(children).replace(/\n$/, '')} />;
+                              }
+                              return (
+                                <code className={`${className || ''} bg-gray-100 px-1.5 py-0.5 rounded text-sm`}>
+                                  {children}
+                                </code>
+                              );
+                            },
+                            pre({ children }) {
+                              return <>{children}</>;
+                            },
+                          }}
+                        >
                           {msg.content}
                         </ReactMarkdown>
                       ) : (

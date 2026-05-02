@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
 
   const { messages } = await req.json();
 
-  // 限制对话轮数，防止恶意消耗 token
-  const trimmedMessages = messages.slice(-20).map(
+  // 智能上下文管理：超过 16 条时，将早期消息压缩为摘要
+  const allMessages = messages.map(
     (m: { role: string; content: string; image?: string }) => {
       if (m.image) {
         return {
@@ -59,6 +59,25 @@ export async function POST(req: NextRequest) {
       return { role: m.role, content: m.content };
     }
   );
+
+  let trimmedMessages;
+  if (allMessages.length > 16) {
+    const oldMessages = allMessages.slice(0, -12);
+    const recentMessages = allMessages.slice(-12);
+    const summaryText = oldMessages
+      .filter((m: { role: string }) => m.role === 'user')
+      .map((m: { content: string | Array<{ type: string; text?: string }> }) =>
+        typeof m.content === 'string' ? m.content : m.content.find((c: { type: string }) => c.type === 'text')?.text || ''
+      )
+      .join('；');
+    const summaryMessage = {
+      role: 'system' as const,
+      content: `[对话历史摘要] 用户之前咨询过：${summaryText.slice(0, 500)}`,
+    };
+    trimmedMessages = [summaryMessage, ...recentMessages];
+  } else {
+    trimmedMessages = allMessages.slice(-20);
+  }
 
   const apiKey = process.env.MIMO_API_KEY;
   const apiBase = process.env.MIMO_API_BASE || 'https://token-plan-cn.xiaomimimo.com/v1';
