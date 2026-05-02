@@ -615,8 +615,8 @@ export default function Home() {
             </div>
             <p className="text-xs text-gray-400 text-center mt-2">
               {mode === 'construction'
-                ? '告诉我施工进展 · 拍照给我看现场 · 说&ldquo;通过&rdquo;进入下一阶段'
-                : '输入&ldquo;跳过&rdquo;跳过当前问题 · 输入&ldquo;导出&rdquo;生成方案文档 · 支持上传效果图'}
+                ? '告诉我施工进展 · 拍照给我看现场 · 说“通过”进入下一阶段'
+                : '输入“跳过”跳过当前问题 · 输入“导出”生成方案文档 · 支持上传效果图'}
             </p>
           </div>
         </div>
