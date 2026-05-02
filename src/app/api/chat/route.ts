@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { SYSTEM_PROMPT } from '@/lib/prompts';
+import { CONSTRUCTION_PROMPT } from '@/lib/constructionPrompt';
 
 // 简单的内存速率限制：每个 IP 每分钟最多 10 次请求
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -42,7 +43,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { messages } = await req.json();
+  const { messages, mode } = await req.json();
+  const systemPrompt = mode === 'construction' ? CONSTRUCTION_PROMPT : SYSTEM_PROMPT;
 
   // 智能上下文管理：超过 16 条时，将早期消息压缩为摘要
   const allMessages = messages.map(
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedMessages],
+      messages: [{ role: 'system', content: systemPrompt }, ...trimmedMessages],
       stream: true,
       max_tokens: 8000, // 装修建议内容较长，给足空间
     }),

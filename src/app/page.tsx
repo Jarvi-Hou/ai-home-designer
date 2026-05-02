@@ -6,8 +6,11 @@ import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import DecisionPanel from '@/components/DecisionPanel';
+import ConstructionPanel from '@/components/ConstructionPanel';
 import { parseProgress } from '@/lib/parseProgress';
+import { parseConstruction } from '@/lib/parseConstruction';
 import { ProgressData, Decision } from '@/lib/progressTypes';
+import { ConstructionData } from '@/lib/constructionTypes';
 
 const MermaidBlock = dynamic(() => import('@/components/MermaidBlock'), {
   ssr: false,
@@ -137,7 +140,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [mode, setMode] = useState<'quest' | 'construction'>('quest');
   const [progress, setProgress] = useState<ProgressData | null>(null);
+  const [construction, setConstruction] = useState<ConstructionData | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -163,10 +168,20 @@ export default function Home() {
       setMessages(session.messages);
       const lastAssistant = [...session.messages].reverse().find((m) => m.role === 'assistant');
       if (lastAssistant) {
-        const { progress: restored } = parseProgress(lastAssistant.content);
-        setProgress(restored);
+        const { construction: restoredC } = parseConstruction(lastAssistant.content);
+        if (restoredC) {
+          setMode('construction');
+          setConstruction(restoredC);
+          setProgress(null);
+        } else {
+          const { progress: restored } = parseProgress(lastAssistant.content);
+          setProgress(restored);
+          setConstruction(null);
+          if (restored) setMode('quest');
+        }
       } else {
         setProgress(null);
+        setConstruction(null);
       }
     }
   }, [currentId, sessions]);
@@ -174,8 +189,9 @@ export default function Home() {
   const displayMessages = useMemo(() => {
     return messages.map((msg) => {
       if (msg.role === 'assistant' && msg.content) {
-        const { displayContent } = parseProgress(msg.content);
-        return { ...msg, content: displayContent };
+        const { displayContent: d1 } = parseProgress(msg.content);
+        const { displayContent: d2 } = parseConstruction(d1);
+        return { ...msg, content: d2 };
       }
       return msg;
     });
@@ -212,6 +228,7 @@ export default function Home() {
               content: m.content,
               ...(m.image ? { image: m.image } : {}),
             })),
+            mode,
           }),
         });
 
@@ -257,12 +274,20 @@ export default function Home() {
           }
         }
 
-        // Parse progress from final content
-        const { progress: parsed } = parseProgress(assistantContent);
-        if (parsed) {
-          setProgress(parsed);
-          if (!panelOpen && parsed.decisions.length > 0) {
-            setPanelOpen(true);
+        // Parse progress/construction from final content
+        if (mode === 'construction') {
+          const { construction: parsed } = parseConstruction(assistantContent);
+          if (parsed) {
+            setConstruction(parsed);
+            if (!panelOpen) setPanelOpen(true);
+          }
+        } else {
+          const { progress: parsed } = parseProgress(assistantContent);
+          if (parsed) {
+            setProgress(parsed);
+            if (!panelOpen && parsed.decisions.length > 0) {
+              setPanelOpen(true);
+            }
           }
         }
 
@@ -291,13 +316,15 @@ export default function Home() {
         setIsLoading(false);
       }
     },
-    [messages, isLoading, currentId, createSession, updateSession, pendingImage, panelOpen]
+    [messages, isLoading, currentId, createSession, updateSession, pendingImage, panelOpen, mode]
   );
 
   const handleNewChat = () => {
     setMessages([]);
     setProgress(null);
+    setConstruction(null);
     setPanelOpen(false);
+    setMode('quest');
     clearCurrent();
   };
 
@@ -357,18 +384,25 @@ export default function Home() {
               </svg>
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold text-gray-900 truncate">🏠 装修闯关</h1>
-              <p className="text-xs text-gray-500 truncate">一步步帮你搞定装修方案</p>
+              <h1 className="text-lg font-bold text-gray-900 truncate">
+                {mode === 'construction' ? '🔧 施工跟进' : '🏠 装修闯关'}
+              </h1>
+              <p className="text-xs text-gray-500 truncate">
+                {mode === 'construction' ? '盯质量、控预算、管进度' : '一步步帮你搞定装修方案'}
+              </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {progress && (
+              {(progress || construction) && (
                 <button
                   onClick={() => setPanelOpen(!panelOpen)}
-                  className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50
-                    rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 whitespace-nowrap"
+                  className={`px-3 py-1.5 text-sm rounded-lg hover:opacity-80 transition-colors border whitespace-nowrap ${
+                    mode === 'construction'
+                      ? 'text-blue-600 bg-blue-50 border-blue-200'
+                      : 'text-orange-600 bg-orange-50 border-orange-200'
+                  }`}
                 >
-                  📋 方案
-                  {progress.decisions.filter((d) => d.is_new).length > 0 && (
+                  {mode === 'construction' ? '🔧 进度' : '📋 方案'}
+                  {mode === 'quest' && progress && progress.decisions.filter((d) => d.is_new).length > 0 && (
                     <span className="ml-1 px-1.5 py-0.5 bg-orange-500 text-white text-[10px] rounded-full">
                       {progress.decisions.filter((d) => d.is_new).length}
                     </span>
@@ -388,24 +422,47 @@ export default function Home() {
           <div className="flex-1 overflow-y-auto chat-container px-4 py-6 space-y-4">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full">
-                <div className="text-6xl mb-4">🏗️</div>
+                <div className="text-6xl mb-4">🏠</div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                  装修闯关模式
+                  AI 装修助手
                 </h2>
-                <p className="text-gray-500 mb-2 text-center max-w-md">
-                  像玩游戏一样，一步步做出装修决策
-                </p>
-                <p className="text-gray-400 mb-8 text-center max-w-md text-sm">
-                  走完全部关卡 → 导出一份装修方案 → 拿给装修公司报价
+                <p className="text-gray-500 mb-8 text-center max-w-md">
+                  选择你当前的阶段，开始装修之旅
                 </p>
 
-                <button
-                  onClick={() => sendMessage('开始装修闯关')}
-                  className="px-8 py-3 bg-orange-500 text-white rounded-2xl text-base font-medium
-                    hover:bg-orange-600 transition-colors shadow-lg shadow-orange-200"
-                >
-                  🎮 开始闯关
-                </button>
+                <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg px-4">
+                  <button
+                    onClick={() => {
+                      setMode('quest');
+                      sendMessage('开始装修闯关');
+                    }}
+                    className="flex-1 p-5 bg-white border-2 border-orange-200 rounded-2xl
+                      hover:border-orange-400 hover:shadow-lg hover:shadow-orange-100
+                      transition-all text-left group"
+                  >
+                    <div className="text-3xl mb-2">🎮</div>
+                    <div className="font-bold text-gray-800 mb-1">装修闯关</div>
+                    <div className="text-sm text-gray-500">
+                      还没开工？一步步做决策，导出方案给装修公司报价
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMode('construction');
+                      sendMessage('开始施工跟进');
+                    }}
+                    className="flex-1 p-5 bg-white border-2 border-blue-200 rounded-2xl
+                      hover:border-blue-400 hover:shadow-lg hover:shadow-blue-100
+                      transition-all text-left group"
+                  >
+                    <div className="text-3xl mb-2">🔧</div>
+                    <div className="font-bold text-gray-800 mb-1">施工跟进</div>
+                    <div className="text-sm text-gray-500">
+                      已经开工？帮你盯质量、控预算、管进度
+                    </div>
+                  </button>
+                </div>
               </div>
             ) : (
               displayMessages.map((msg, i) => (
@@ -557,19 +614,29 @@ export default function Home() {
               </div>
             </div>
             <p className="text-xs text-gray-400 text-center mt-2">
-              输入&ldquo;跳过&rdquo;跳过当前问题 · 输入&ldquo;导出&rdquo;生成方案文档 · 支持上传效果图
+              {mode === 'construction'
+                ? '告诉我施工进展 · 拍照给我看现场 · 说&ldquo;通过&rdquo;进入下一阶段'
+                : '输入&ldquo;跳过&rdquo;跳过当前问题 · 输入&ldquo;导出&rdquo;生成方案文档 · 支持上传效果图'}
             </p>
           </div>
         </div>
 
-        {/* Decision Panel */}
-        <DecisionPanel
-          progress={progress}
-          onDiscussItem={handleDiscussItem}
-          onExportPdf={handleExportPdf}
-          isOpen={panelOpen}
-          onClose={() => setPanelOpen(false)}
-        />
+        {/* Side Panel */}
+        {mode === 'construction' ? (
+          <ConstructionPanel
+            data={construction}
+            isOpen={panelOpen}
+            onClose={() => setPanelOpen(false)}
+          />
+        ) : (
+          <DecisionPanel
+            progress={progress}
+            onDiscussItem={handleDiscussItem}
+            onExportPdf={handleExportPdf}
+            isOpen={panelOpen}
+            onClose={() => setPanelOpen(false)}
+          />
+        )}
       </div>
     </div>
   );
