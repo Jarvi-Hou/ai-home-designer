@@ -143,8 +143,9 @@ export default function Sidebar({
                         onDeleteProject(p.id);
                       }
                     }}
+                    aria-label="删除项目"
                     className="opacity-0 group-hover:opacity-100 text-gray-400
-                      hover:text-red-500 transition-all text-xs p-0.5"
+                      hover:text-red-500 transition-all text-xs p-0.5 min-h-[44px] min-w-[44px] flex items-center justify-center"
                   >
                     ✕
                   </button>
@@ -214,8 +215,9 @@ export default function Sidebar({
                     e.stopPropagation();
                     onDelete(session.id);
                   }}
+                  aria-label="删除会话"
                   className="opacity-0 group-hover:opacity-100 text-gray-400
-                    hover:text-red-500 transition-all text-xs p-1"
+                    hover:text-red-500 transition-all text-xs p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   🗑️
                 </button>

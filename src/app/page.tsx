@@ -7,6 +7,8 @@ import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import DecisionPanel from '@/components/DecisionPanel';
 import ConstructionPanel from '@/components/ConstructionPanel';
+import BudgetCalculator from '@/components/BudgetCalculator';
+import RenovationJourney from '@/components/RenovationJourney';
 import { parseProgress } from '@/lib/parseProgress';
 import { parseConstruction } from '@/lib/parseConstruction';
 import { ProgressData, Decision } from '@/lib/progressTypes';
@@ -270,7 +272,10 @@ export default function Home() {
           }),
         });
 
-        if (!response.ok) throw new Error('请求失败');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.error || '请求出了点问题，请稍后再试');
+        }
 
         const reader = response.body?.getReader();
         if (!reader) throw new Error('无法读取响应');
@@ -317,7 +322,7 @@ export default function Home() {
           const { construction: parsed } = parseConstruction(assistantContent);
           if (parsed && activeProjectId) {
             mergeConstruction(activeProjectId, parsed);
-            if (!panelOpen) setPanelOpen(true);
+            if (!panelOpen && parsed.stages.length > 0) setPanelOpen(true);
           }
         } else {
           const { progress: parsed } = parseProgress(assistantContent);
@@ -339,11 +344,12 @@ export default function Home() {
         }
       } catch (error) {
         console.error('Error:', error);
+        const errMsg = error instanceof Error ? error.message : '请求出了点问题，请稍后再试';
         const errorMessages = [
           ...newMessages,
           {
             role: 'assistant' as const,
-            content: '抱歉，请求出了点问题，请稍后再试。',
+            content: `⚠️ ${errMsg}`,
           },
         ];
         setMessages(errorMessages);
@@ -358,7 +364,11 @@ export default function Home() {
   );
 
   const handleStartMode = (selectedMode: 'quest' | 'construction') => {
-    const name = selectedMode === 'quest' ? '我的装修方案' : '我的施工跟进';
+    const baseName = selectedMode === 'quest' ? '装修方案' : '施工跟进';
+    const today = new Date().toISOString().slice(0, 10);
+    const dateName = `${baseName} · ${today}`;
+    const sameNameCount = projects.filter((p) => p.name.startsWith(dateName)).length;
+    const name = sameNameCount === 0 ? dateName : `${dateName} (${sameNameCount + 1})`;
     const projectId = createProject(name, selectedMode);
     setMode(selectedMode);
 
@@ -378,6 +388,14 @@ export default function Home() {
     setPanelOpen(false);
     clearCurrent();
   };
+
+  const handleDeleteProject = useCallback((id: string) => {
+    const proj = projects.find((p) => p.id === id);
+    if (proj) {
+      proj.sessionIds.forEach((sid) => deleteSession(sid));
+    }
+    deleteProject(id);
+  }, [projects, deleteProject, deleteSession]);
 
   const handleNewProject = () => {
     setMessages([]);
@@ -449,7 +467,7 @@ export default function Home() {
           setMessages([]);
         }}
         onNewProject={handleNewProject}
-        onDeleteProject={deleteProject}
+        onDeleteProject={handleDeleteProject}
         onRenameProject={renameProject}
       />
 
@@ -459,7 +477,8 @@ export default function Home() {
           <header className="px-4 py-3 border-b border-gray-200 bg-white flex items-center gap-2 shrink-0">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 shrink-0"
+              aria-label="打开侧边栏"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 shrink-0 min-h-[44px] min-w-[44px]"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 12h18M3 6h18M3 18h18" />
@@ -479,7 +498,8 @@ export default function Home() {
               {(projectProgress || projectConstruction) && (
                 <button
                   onClick={() => setPanelOpen(!panelOpen)}
-                  className={`px-3 py-1.5 text-sm rounded-lg hover:opacity-80 transition-colors border whitespace-nowrap ${
+                  aria-label={mode === 'construction' ? '查看施工进度' : '查看装修方案'}
+                  className={`px-3 py-1.5 text-sm rounded-lg hover:opacity-80 transition-colors border whitespace-nowrap min-h-[44px] ${
                     mode === 'construction'
                       ? 'text-blue-600 bg-blue-50 border-blue-200'
                       : 'text-orange-600 bg-orange-50 border-orange-200'
@@ -561,6 +581,10 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
+                <div className="mt-6 flex flex-wrap justify-center gap-3 w-full max-w-lg px-4">
+                  <RenovationJourney onAsk={(q) => sendMessage(q)} />
+                </div>
               </div>
             ) : showProjectWelcome ? (
               <div className="flex flex-col items-center justify-center h-full">
@@ -588,6 +612,11 @@ export default function Home() {
                 >
                   💬 继续对话
                 </button>
+                {mode === 'quest' && (
+                  <div className="mt-4 w-full max-w-sm">
+                    <BudgetCalculator onAsk={(q) => sendMessage(q)} />
+                  </div>
+                )}
               </div>
             ) : (
               displayMessages.map((msg, i) => (
@@ -700,9 +729,9 @@ export default function Home() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isLoading}
+                  aria-label="上传效果图"
                   className="p-2.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50
-                    rounded-xl transition-colors shrink-0 disabled:opacity-40"
-                  title="上传效果图"
+                    rounded-xl transition-colors shrink-0 disabled:opacity-40 min-h-[44px] min-w-[44px]"
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />

@@ -61,7 +61,8 @@ export default function DecisionPanel({
             <h3 className="font-bold text-gray-800 text-sm">📋 我的装修方案</h3>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 lg:hidden"
+              aria-label="关闭方案面板"
+              className="text-gray-400 hover:text-gray-600 lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               ✕
             </button>

@@ -115,11 +115,14 @@ stages 数组中每个元素：
 }
 
 规则：
-- 只包含已经开始讨论或用户提到的阶段
+- **第一次回复（开场白）**：stages 可以为空，但必须在回复中询问用户当前所处阶段
+- **第二次起**：只要用户提到任何施工阶段或进展，stages 必须包含至少 1 个元素，且该阶段的 is_current 设为 true
+- 如果用户尚未说明阶段，用推测的"拆改"阶段占位，is_current: true，status: "not_started"
 - is_current 标记当前正在讨论的阶段
 - checklist 中 passed 为 null 表示未检查，true 通过，false 不通过
 - 用户报告实际费用时更新 actual_cost
 - status 为 issue 时，notes 说明问题
+- 绝不输出空 stages（[]）超过第一轮回复
 
 ## 开场白
 
