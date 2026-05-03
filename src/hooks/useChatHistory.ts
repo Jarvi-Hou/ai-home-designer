@@ -42,30 +42,29 @@ export function useChatHistory() {
 
   const currentSession = sessions.find((s) => s.id === currentId) || null;
 
-  const createSession = useCallback(
-    (projectId?: string, tag?: string) => {
-      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      const session: ChatSession = {
-        id,
-        title: '新对话',
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        projectId,
-        tag,
-      };
-      const updated = [session, ...sessions];
-      setSessions(updated);
+  const createSession = useCallback((projectId?: string, tag?: string) => {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const session: ChatSession = {
+      id,
+      title: '新对话',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      projectId,
+      tag,
+    };
+    setSessions((prev) => {
+      const updated = [session, ...prev];
       saveSessions(updated);
-      setCurrentId(id);
-      return id;
-    },
-    [sessions]
-  );
+      return updated;
+    });
+    setCurrentId(id);
+    return id;
+  }, []);
 
-  const updateSession = useCallback(
-    (id: string, messages: ChatSession['messages']) => {
-      const updated = sessions.map((s) => {
+  const updateSession = useCallback((id: string, messages: ChatSession['messages']) => {
+    setSessions((prev) => {
+      const updated = prev.map((s) => {
         if (s.id !== id) return s;
         const firstUser = messages.find((m) => m.role === 'user');
         const title = firstUser
@@ -73,21 +72,19 @@ export function useChatHistory() {
           : '新对话';
         return { ...s, title, messages, updatedAt: Date.now() };
       });
-      setSessions(updated);
       saveSessions(updated);
-    },
-    [sessions]
-  );
+      return updated;
+    });
+  }, []);
 
-  const deleteSession = useCallback(
-    (id: string) => {
-      const updated = sessions.filter((s) => s.id !== id);
-      setSessions(updated);
+  const deleteSession = useCallback((id: string) => {
+    setSessions((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
       saveSessions(updated);
-      if (currentId === id) setCurrentId(null);
-    },
-    [sessions, currentId]
-  );
+      return updated;
+    });
+    setCurrentId((prev) => (prev === id ? null : prev));
+  }, []);
 
   const switchSession = useCallback((id: string) => {
     setCurrentId(id);
@@ -97,12 +94,9 @@ export function useChatHistory() {
     setCurrentId(null);
   }, []);
 
-  const getSessionsByProject = useCallback(
-    (projectId: string) => {
-      return sessions.filter((s) => s.projectId === projectId);
-    },
-    [sessions]
-  );
+  const getSessionsByProject = useCallback((projectId: string) => {
+    return sessions.filter((s) => s.projectId === projectId);
+  }, [sessions]);
 
   return {
     sessions,

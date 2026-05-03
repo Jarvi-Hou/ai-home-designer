@@ -111,11 +111,20 @@ export async function POST(req: NextRequest) {
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    return new Response(JSON.stringify({ error: `API 调用失败: ${error}` }), {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    let userMessage: string;
+    if (response.status === 401 || response.status === 403) {
+      userMessage = '密钥无效或已过期，请检查 MIMO_API_KEY 配置';
+    } else if (response.status === 429) {
+      userMessage = '请求太频繁，请稍后再试';
+    } else if (response.status >= 500) {
+      userMessage = 'AI 服务暂时不可用，请稍后重试';
+    } else {
+      userMessage = `API 调用失败 (${response.status})`;
+    }
+    return new Response(
+      JSON.stringify({ error: userMessage, code: response.status }),
+      { status: response.status, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   // 转发流式响应

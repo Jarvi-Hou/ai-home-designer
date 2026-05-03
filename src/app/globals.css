@@ -73,6 +73,17 @@ body {
   animation: thinking 1.4s infinite ease-in-out;
 }
 
+/* Safe-area for iOS notch/home indicator */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Long-text word break in chat bubbles */
+.prose-chat {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 /* Markdown 样式 */
 .prose-chat ul {
   list-style-type: disc;
@@ -109,6 +120,9 @@ body {
   width: 100%;
   margin: 0.75em 0;
   font-size: 0.9em;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .prose-chat th,

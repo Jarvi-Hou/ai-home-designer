@@ -47,11 +47,36 @@ export function mergeConstructionData(
   project: Project,
   newData: ConstructionData
 ): Partial<Project> {
+  // Don't write empty stages on first merge — wait until AI provides real data
+  if (newData.stages.length === 0 && !project.constructionData) {
+    return { updatedAt: Date.now() };
+  }
+
   if (!project.constructionData) {
     return { constructionData: newData, updatedAt: Date.now() };
   }
 
   const existing = project.constructionData;
+
+  // If AI returned empty stages, preserve what we already have
+  if (newData.stages.length === 0) {
+    return {
+      constructionData: {
+        ...newData,
+        stages: existing.stages,
+        budget: {
+          planned_total: newData.budget.planned_total ?? existing.budget.planned_total,
+          actual_total: Math.max(newData.budget.actual_total, existing.budget.actual_total),
+        },
+        timeline: {
+          start: newData.timeline.start ?? existing.timeline.start,
+          expected_end: newData.timeline.expected_end ?? existing.timeline.expected_end,
+        },
+      },
+      updatedAt: Date.now(),
+    };
+  }
+
   const stageMap = new Map<string, ConstructionStage>();
 
   for (const s of existing.stages) {

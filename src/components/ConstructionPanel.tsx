@@ -77,7 +77,8 @@ export default function ConstructionPanel({
             <h3 className="font-bold text-gray-800 text-sm">🔧 施工进度</h3>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 lg:hidden"
+              aria-label="关闭进度面板"
+              className="text-gray-400 hover:text-gray-600 lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               ✕
             </button>
