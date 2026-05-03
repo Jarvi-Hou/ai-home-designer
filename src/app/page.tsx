@@ -503,7 +503,7 @@ export default function Home() {
               <h1 className="text-lg font-bold text-gray-900 truncate">
                 {activeProject
                   ? `${mode === 'construction' ? '🔧' : '🏠'} ${activeProject.name}`
-                  : '🏠 AI 装修助手'}
+                  : '🏠 装修参谋'}
               </h1>
               <p className="text-xs text-gray-500 truncate">
                 {mode === 'construction' ? '盯质量、控预算、管进度' : '一步步帮你搞定装修方案'}
@@ -540,10 +540,13 @@ export default function Home() {
               <div className="flex flex-col items-center justify-center h-full">
                 <div className="text-6xl mb-4">🏠</div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                  AI 装修助手
+                  装修参谋
                 </h2>
-                <p className="text-gray-500 mb-8 text-center max-w-md">
-                  选择你当前的阶段，开始装修之旅
+                <p className="text-gray-500 mb-1 text-center max-w-md font-medium">
+                  装修不踩坑 — AI 帮你一步步做决策
+                </p>
+                <p className="text-gray-400 mb-8 text-center max-w-md text-sm">
+                  走完全程，生成一份需求文档直接给装修公司报价
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg px-4">
