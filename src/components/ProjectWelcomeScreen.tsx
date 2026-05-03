@@ -1,7 +1,6 @@
 'use client';
 
 import BudgetCalculator from '@/components/BudgetCalculator';
-import { Decision } from '@/lib/progressTypes';
 
 interface Props {
   projectName?: string;

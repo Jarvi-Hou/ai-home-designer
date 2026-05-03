@@ -33,6 +33,7 @@ export default function ChatInputBar({
       <div className="max-w-3xl mx-auto">
         {pendingImage && (
           <div className="relative inline-block mb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={pendingImage} alt="待发送图片" className="h-20 rounded-lg border border-gray-200" />
             <button
               onClick={onClearImage}

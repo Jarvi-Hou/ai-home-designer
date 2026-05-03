@@ -31,6 +31,7 @@ export default function MessageBubble({ message: msg, isStreaming }: Props) {
         }`}
       >
         {msg.image && (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={msg.image}
             alt="上传的图片"
