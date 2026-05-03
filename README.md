@@ -10,6 +10,8 @@
 
 **Live Demo → [ai-home-designer-eosin.vercel.app](https://ai-home-designer-eosin.vercel.app)**
 
+![装修参谋产品截图](docs/screenshot.png)
+
 ---
 
 ## 为什么不直接问 ChatGPT？
