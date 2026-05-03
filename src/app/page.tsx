@@ -510,7 +510,7 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {(projectProgress || projectConstruction) && (
+              {activeProject && (
                 <button
                   onClick={() => setPanelOpen(!panelOpen)}
                   aria-label={mode === 'construction' ? '查看施工进度' : '查看装修方案'}
