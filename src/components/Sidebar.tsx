@@ -57,116 +57,130 @@ export default function Sidebar({
     <>
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/30 z-40 md:hidden"
+          className="fixed inset-0 bg-black/40 z-40 md:hidden backdrop-blur-sm"
           onClick={onClose}
         />
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full w-72 bg-white border-r border-gray-200 z-50
+        className={`fixed top-0 left-0 h-full w-72 bg-white border-r border-slate-200 z-50
           transform transition-transform duration-200 ease-in-out flex flex-col
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           md:relative md:translate-x-0 ${isOpen ? '' : 'md:-translate-x-full'}`}
       >
-        {/* Project selector */}
-        <div className="p-3 border-b border-gray-100 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400 font-medium">项目</span>
-            <button
-              onClick={() => {
-                onNewProject();
-                onClose();
-              }}
-              className="text-xs text-orange-500 hover:text-orange-600"
-            >
-              + 新项目
-            </button>
+        {/* Header brand */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center shrink-0">
+              <span className="text-sm">🏠</span>
+            </div>
+            <span className="font-semibold text-slate-900 text-sm">装修参谋</span>
           </div>
 
-          {projects.length === 0 ? (
-            <div className="text-xs text-gray-400 text-center py-2">
-              选择模式开始第一个项目
+          {/* Project selector */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">项目</span>
+              <button
+                onClick={() => {
+                  onNewProject();
+                  onClose();
+                }}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                + 新项目
+              </button>
             </div>
-          ) : (
-            <div className="space-y-1 max-h-32 overflow-y-auto">
-              {projects.map((p) => (
-                <div
-                  key={p.id}
-                  className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-sm
-                    transition-colors ${
-                    p.id === activeProjectId
-                      ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                      : 'hover:bg-gray-50 text-gray-600'
-                  }`}
-                  onClick={() => {
-                    onSelectProject(p.id);
-                    onClose();
-                  }}
-                >
-                  <span className="shrink-0">
-                    {p.mode === 'construction' ? '🔧' : '🏠'}
-                  </span>
-                  {editingId === p.id ? (
-                    <input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onBlur={() => {
-                        if (editName.trim()) onRenameProject(p.id, editName.trim());
-                        setEditingId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+
+            {projects.length === 0 ? (
+              <div className="text-xs text-slate-400 text-center py-3">
+                选择模式开始第一个项目
+              </div>
+            ) : (
+              <div className="space-y-0.5 max-h-36 overflow-y-auto">
+                {projects.map((p) => (
+                  <div
+                    key={p.id}
+                    className={`group flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer text-sm
+                      transition-colors ${
+                      p.id === activeProjectId
+                        ? 'bg-slate-900 text-white'
+                        : 'hover:bg-slate-100 text-slate-600'
+                    }`}
+                    onClick={() => {
+                      onSelectProject(p.id);
+                      onClose();
+                    }}
+                  >
+                    <span className="shrink-0 text-base">
+                      {p.mode === 'construction' ? '🔧' : '🏠'}
+                    </span>
+                    {editingId === p.id ? (
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onBlur={() => {
                           if (editName.trim()) onRenameProject(p.id, editName.trim());
                           setEditingId(null);
-                        }
-                      }}
-                      className="flex-1 min-w-0 text-sm bg-white border border-orange-300 rounded px-1.5 py-0.5
-                        focus:outline-none"
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <span
-                      className="flex-1 min-w-0 truncate"
-                      onDoubleClick={(e) => {
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            if (editName.trim()) onRenameProject(p.id, editName.trim());
+                            setEditingId(null);
+                          }
+                        }}
+                        className="flex-1 min-w-0 text-sm bg-white border border-blue-400 rounded-lg px-1.5 py-0.5
+                          focus:outline-none text-slate-900"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span
+                        className="flex-1 min-w-0 truncate text-sm"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(p.id);
+                          setEditName(p.name);
+                        }}
+                      >
+                        {p.name}
+                      </span>
+                    )}
+                    <button
+                      onClick={(e) => {
                         e.stopPropagation();
-                        setEditingId(p.id);
-                        setEditName(p.name);
+                        setPendingDeleteProjectId(p.id);
                       }}
+                      aria-label="删除项目"
+                      className={`opacity-0 group-hover:opacity-100 transition-all text-xs p-0.5
+                        min-h-[32px] min-w-[32px] flex items-center justify-center rounded-lg
+                        ${p.id === activeProjectId
+                          ? 'hover:bg-white/20 text-white/60 hover:text-white'
+                          : 'hover:bg-slate-200 text-slate-400 hover:text-red-500'
+                        }`}
                     >
-                      {p.name}
-                    </span>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPendingDeleteProjectId(p.id);
-                    }}
-                    aria-label="删除项目"
-                    className="opacity-0 group-hover:opacity-100 text-gray-400
-                      hover:text-red-500 transition-all text-xs p-0.5 min-h-[44px] min-w-[44px] flex items-center justify-center"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* New chat button */}
         {activeProject && (
-          <div className="p-3 border-b border-gray-100">
+          <div className="px-3 py-2.5 border-b border-slate-100">
             <button
               onClick={() => {
                 onNew();
                 onClose();
               }}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-2
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5
                 text-white rounded-xl text-sm font-medium transition-colors ${
                 activeProject.mode === 'construction'
-                  ? 'bg-blue-500 hover:bg-blue-600'
-                  : 'bg-orange-500 hover:bg-orange-600'
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : 'bg-slate-900 hover:bg-slate-700'
               }`}
             >
               ✨ 新对话
@@ -175,9 +189,9 @@ export default function Sidebar({
         )}
 
         {/* Session list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {sessions.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm mt-8">
+            <div className="text-center text-slate-400 text-sm mt-8">
               {activeProject ? '暂无对话记录' : '选择一个项目开始'}
             </div>
           ) : (
@@ -187,25 +201,25 @@ export default function Sidebar({
                 className={`group flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer
                   transition-colors ${
                     session.id === currentId
-                      ? 'bg-orange-50 text-orange-700'
-                      : 'hover:bg-gray-50 text-gray-700'
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'hover:bg-slate-50 text-slate-600'
                   }`}
                 onClick={() => {
                   onSelect(session.id);
                   onClose();
                 }}
               >
-                <span className="text-sm">💬</span>
+                <span className="text-sm text-slate-400">💬</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm truncate">{session.title}</span>
+                    <span className="text-sm truncate font-medium">{session.title}</span>
                     {session.tag && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full shrink-0 font-medium">
                         {session.tag}
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-slate-400">
                     {formatTime(session.updatedAt)}
                   </div>
                 </div>
@@ -215,7 +229,7 @@ export default function Sidebar({
                     onDelete(session.id);
                   }}
                   aria-label="删除会话"
-                  className="opacity-0 group-hover:opacity-100 text-gray-400
+                  className="opacity-0 group-hover:opacity-100 text-slate-400
                     hover:text-red-500 transition-all text-xs p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   🗑️
@@ -226,16 +240,16 @@ export default function Sidebar({
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-gray-100 text-center space-y-1">
+        <div className="p-3 border-t border-slate-100 text-center space-y-1">
           <a
             href="https://github.com/Jarvi-Hou/ai-home-designer"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors block"
+            className="text-xs text-slate-400 hover:text-slate-600 transition-colors block"
           >
             ⭐ GitHub · AI 家居设计师
           </a>
-          <div className="text-[10px] text-gray-300">
+          <div className="text-[10px] text-slate-300">
             v{process.env.NEXT_PUBLIC_APP_VERSION}
           </div>
         </div>
@@ -245,16 +259,19 @@ export default function Sidebar({
       {pendingDeleteProjectId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setPendingDeleteProjectId(null)}
           />
-          <div className="relative bg-white rounded-2xl shadow-xl p-5 w-72 mx-4">
-            <p className="text-sm text-gray-700 mb-1">确定删除此项目？</p>
-            <p className="text-xs text-gray-400 mb-5">对话记录将保留在历史中</p>
-            <div className="flex gap-2 justify-end">
+          <div className="relative bg-white rounded-3xl shadow-2xl p-6 w-72 mx-4">
+            <div className="w-10 h-10 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-xl">🗑️</span>
+            </div>
+            <p className="text-sm font-semibold text-slate-800 mb-1 text-center">确定删除此项目？</p>
+            <p className="text-xs text-slate-400 mb-5 text-center">对话记录将保留在历史中</p>
+            <div className="flex gap-2">
               <button
                 onClick={() => setPendingDeleteProjectId(null)}
-                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 px-4 py-2.5 text-sm text-slate-600 rounded-xl bg-slate-100 hover:bg-slate-200 font-medium transition-colors"
               >
                 取消
               </button>
@@ -263,7 +280,7 @@ export default function Sidebar({
                   onDeleteProject(pendingDeleteProjectId);
                   setPendingDeleteProjectId(null);
                 }}
-                className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg"
+                className="flex-1 px-4 py-2.5 text-sm text-white bg-red-500 hover:bg-red-600 rounded-xl font-medium transition-colors"
               >
                 删除
               </button>

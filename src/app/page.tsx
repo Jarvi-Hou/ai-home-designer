@@ -365,22 +365,22 @@ export default function Home() {
       <div className="flex-1 flex min-w-0">
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
-          <header className="px-4 py-3 border-b border-gray-200 bg-white flex items-center gap-2 shrink-0">
+          <header className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2 shrink-0 shadow-sm">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               aria-label="打开侧边栏"
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 shrink-0 min-h-[44px] min-w-[44px]"
+              className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 12h18M3 6h18M3 18h18" />
               </svg>
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold text-gray-900 truncate">
+              <h1 className="text-base font-semibold text-slate-900 truncate tracking-tight">
                 {activeProject ? `${mode === 'construction' ? '🔧' : '🏠'} ${activeProject.name}` : '🏠 装修参谋'}
               </h1>
-              <p className="text-xs text-gray-500 truncate">
-                {mode === 'construction' ? '盯质量、控预算、管进度' : '一步步帮你搞定装修方案'}
+              <p className="text-xs text-slate-400 truncate">
+                {mode === 'construction' ? '盯质量 · 控预算 · 管进度' : '一步步帮你搞定装修方案'}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -388,10 +388,10 @@ export default function Home() {
                 <button
                   onClick={() => setPanelOpen(!panelOpen)}
                   aria-label={mode === 'construction' ? '查看施工进度' : '查看装修方案'}
-                  className={`px-3 py-1.5 text-sm rounded-lg hover:opacity-80 transition-colors border whitespace-nowrap min-h-[44px] ${
+                  className={`px-3.5 py-1.5 text-sm rounded-xl hover:opacity-90 transition-all border whitespace-nowrap min-h-[44px] font-medium ${
                     mode === 'construction'
                       ? 'text-blue-600 bg-blue-50 border-blue-200'
-                      : 'text-orange-600 bg-orange-50 border-orange-200'
+                      : 'text-slate-700 bg-slate-100 border-slate-200'
                   }`}
                 >
                   {mode === 'construction' ? '🔧 进度' : '📋 方案'}
@@ -400,8 +400,8 @@ export default function Home() {
               {activeProjectId && (
                 <button
                   onClick={handleNewChat}
-                  className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50 rounded-lg
-                    hover:bg-gray-100 transition-colors border border-gray-200 whitespace-nowrap"
+                  className="px-3.5 py-1.5 text-sm text-slate-600 bg-slate-50 rounded-xl
+                    hover:bg-slate-100 transition-colors border border-slate-200 whitespace-nowrap font-medium"
                 >
                   ✨ 新对话
                 </button>
@@ -410,7 +410,7 @@ export default function Home() {
           </header>
 
           {/* Chat area */}
-          <div className="flex-1 overflow-y-auto chat-container px-4 py-6 space-y-4">
+          <div className="flex-1 overflow-y-auto chat-container px-4 py-6 space-y-4 bg-slate-50">
             {showModeSelection ? (
               <ModeSelectionScreen
                 projects={projects}
