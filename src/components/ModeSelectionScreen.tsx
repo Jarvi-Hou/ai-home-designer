@@ -23,9 +23,9 @@ export default function ModeSelectionScreen({ projects, onStartMode, onSelectPro
         <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-2xl shadow-xl mb-5">
           <span className="text-3xl">🏠</span>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">装修参谋</h2>
-        <p className="text-slate-500 text-sm font-medium">装修不踩坑 — AI 帮你一步步做决策</p>
-        <p className="text-slate-400 text-xs mt-1">走完全程，生成需求文档直接给装修公司报价</p>
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">装修参谋</h2>
+        <p className="text-slate-800 text-sm font-semibold mb-1">3 小时搞定装修决策，不被坑、不超支</p>
+        <p className="text-slate-400 text-xs">走完全程，生成需求文档直接给装修公司报价</p>
       </div>
 
       {/* Mode cards */}
