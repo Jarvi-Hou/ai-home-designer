@@ -238,7 +238,7 @@ export default function Home() {
   }, [messages]);
 
   const sendMessage = useCallback(
-    async (content: string, image?: string | null) => {
+    async (content: string, image?: string | null, targetSessionId?: string) => {
       if (!content.trim() && !image) return;
       if (isLoading) {
         setSendTip('AI 正在回复，请稍候再发...');
@@ -246,7 +246,7 @@ export default function Home() {
         return;
       }
 
-      let sessionId = currentId;
+      let sessionId = targetSessionId || currentId;
       if (!sessionId) {
         sessionId = createSession(activeProjectId || undefined,
           activeProject ? (STAGE_LABELS[activeProject.currentStage] || activeProject.currentStage) : undefined
@@ -394,9 +394,8 @@ export default function Home() {
     addSessionToProject(projectId, sessionId);
 
     const firstMsg = selectedMode === 'quest' ? '开始装修闯关' : '开始施工跟进';
-    // Manually trigger because createSession sets currentId
-    // but sendMessage checks currentId which won't be updated yet
-    setTimeout(() => sendMessage(firstMsg), 50);
+    // 直接传 sessionId，避免闭包陷阱（setTimeout 会捕获旧的 sendMessage，此时 currentId 还是 null）
+    sendMessage(firstMsg, null, sessionId);
   };
 
   const handleNewChat = () => {
