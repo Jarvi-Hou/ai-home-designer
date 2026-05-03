@@ -236,8 +236,8 @@ export default function Sidebar({
           >
             ⭐ GitHub · AI 家居设计师
           </a>
-          <div className="text-[10px] text-gray-300 select-all">
-            v{process.env.NEXT_PUBLIC_APP_VERSION} · {process.env.NEXT_PUBLIC_BUILD_TIME}
+          <div className="text-[10px] text-gray-300">
+            v{process.env.NEXT_PUBLIC_APP_VERSION}
           </div>
         </div>
       </aside>
