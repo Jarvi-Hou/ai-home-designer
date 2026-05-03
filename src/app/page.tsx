@@ -55,6 +55,16 @@ function compressImage(file: File, maxSize = 1024): Promise<string> {
   });
 }
 
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function exportDecisionsPdf(progress: ProgressData, projectName?: string) {
   const confirmed = progress.decisions.filter((d) => d.status === 'confirmed');
   const pending = progress.decisions.filter((d) => d.status !== 'confirmed');
@@ -68,7 +78,7 @@ function exportDecisionsPdf(progress: ProgressData, projectName?: string) {
   };
 
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>装修方案 - ${dateStr}</title>
+<title>装修方案 - ${escapeHtml(dateStr)}</title>
 <style>
   body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #333; }
   h1 { color: #ea580c; border-bottom: 2px solid #ea580c; padding-bottom: 8px; }
@@ -83,7 +93,7 @@ function exportDecisionsPdf(progress: ProgressData, projectName?: string) {
   .pending { color: #999; font-style: italic; }
   .footer { margin-top: 40px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 12px; }
 </style></head><body>
-<h1>🏠 ${projectName ? projectName + ' — ' : ''}装修需求方案</h1>
+<h1>🏠 ${projectName ? escapeHtml(projectName) + ' — ' : ''}装修需求方案</h1>
 <p>生成时间：${now.toLocaleString('zh-CN')}</p>
 
 <div class="summary">
@@ -109,8 +119,8 @@ function exportDecisionsPdf(progress: ProgressData, projectName?: string) {
 <table>
   <tr><th>项目</th><th>分类</th><th>决策</th><th>预估费用</th></tr>
   ${confirmed.map((d) => `<tr>
-    <td>${d.label}</td><td>${d.category}</td>
-    <td>${d.value || '—'}</td><td>${formatMoney(d.estimated_cost)}</td>
+    <td>${escapeHtml(d.label)}</td><td>${escapeHtml(d.category)}</td>
+    <td>${escapeHtml(d.value) || '—'}</td><td>${formatMoney(d.estimated_cost)}</td>
   </tr>`).join('')}
 </table>`;
 
@@ -119,7 +129,7 @@ function exportDecisionsPdf(progress: ProgressData, projectName?: string) {
 <table>
   <tr><th>项目</th><th>分类</th><th>状态</th></tr>
   ${pending.map((d) => `<tr>
-    <td>${d.label}</td><td>${d.category}</td>
+    <td>${escapeHtml(d.label)}</td><td>${escapeHtml(d.category)}</td>
     <td class="pending">${d.status === 'revisiting' ? '修改中' : '待定'}</td>
   </tr>`).join('')}
 </table>`;
@@ -153,6 +163,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [sendTip, setSendTip] = useState<string | null>(null);
   const [mode, setMode] = useState<'quest' | 'construction'>('quest');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -228,7 +239,12 @@ export default function Home() {
 
   const sendMessage = useCallback(
     async (content: string, image?: string | null) => {
-      if ((!content.trim() && !image) || isLoading) return;
+      if (!content.trim() && !image) return;
+      if (isLoading) {
+        setSendTip('AI 正在回复，请稍候再发...');
+        setTimeout(() => setSendTip(null), 2000);
+        return;
+      }
 
       let sessionId = currentId;
       if (!sessionId) {
@@ -767,7 +783,12 @@ export default function Home() {
                 </button>
               </div>
             </div>
-            <p className="text-xs text-gray-400 text-center mt-2">
+            {sendTip && (
+              <p className="text-xs text-orange-500 text-center mt-1 animate-pulse">
+                {sendTip}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 text-center mt-1">
               {mode === 'construction'
                 ? '告诉我施工进展 · 拍照给我看现场 · 说"通过"进入下一阶段'
                 : '输入"跳过"跳过当前问题 · 输入"导出"生成方案文档 · 支持上传效果图'}

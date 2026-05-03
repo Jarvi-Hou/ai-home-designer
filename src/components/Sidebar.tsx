@@ -227,15 +227,18 @@ export default function Sidebar({
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-gray-100 text-center">
+        <div className="p-3 border-t border-gray-100 text-center space-y-1">
           <a
             href="https://github.com/Jarvi-Hou/ai-home-designer"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors block"
           >
             ⭐ GitHub · AI 家居设计师
           </a>
+          <div className="text-[10px] text-gray-300 select-all">
+            v{process.env.NEXT_PUBLIC_APP_VERSION} · {process.env.NEXT_PUBLIC_BUILD_TIME}
+          </div>
         </div>
       </aside>
     </>
