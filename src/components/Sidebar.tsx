@@ -49,6 +49,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
@@ -139,9 +140,7 @@ export default function Sidebar({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm('确定删除此项目？所有对话记录将保留。')) {
-                        onDeleteProject(p.id);
-                      }
+                      setPendingDeleteProjectId(p.id);
                     }}
                     aria-label="删除项目"
                     className="opacity-0 group-hover:opacity-100 text-gray-400
@@ -241,6 +240,37 @@ export default function Sidebar({
           </div>
         </div>
       </aside>
+
+      {/* Custom delete confirm modal */}
+      {pendingDeleteProjectId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setPendingDeleteProjectId(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl p-5 w-72 mx-4">
+            <p className="text-sm text-gray-700 mb-1">确定删除此项目？</p>
+            <p className="text-xs text-gray-400 mb-5">对话记录将保留在历史中</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPendingDeleteProjectId(null)}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteProject(pendingDeleteProjectId);
+                  setPendingDeleteProjectId(null);
+                }}
+                className="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

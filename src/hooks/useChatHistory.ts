@@ -38,6 +38,13 @@ export function useChatHistory() {
 
   useEffect(() => {
     setSessions(loadSessions());
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue !== null) {
+        try { setSessions(JSON.parse(e.newValue)); } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const currentSession = sessions.find((s) => s.id === currentId) || null;
