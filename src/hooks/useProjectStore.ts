@@ -44,6 +44,13 @@ export function useProjectStore() {
     } else if (loaded.length > 0) {
       setActiveProjectId(loaded[0].id);
     }
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue !== null) {
+        try { setProjects(JSON.parse(e.newValue)); } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) || null;
