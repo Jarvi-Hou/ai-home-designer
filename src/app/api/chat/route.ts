@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { SYSTEM_PROMPT } from '@/lib/prompts';
 import { CONSTRUCTION_PROMPT } from '@/lib/constructionPrompt';
 
+export const maxDuration = 60; // Vercel Serverless Function timeout (seconds)
+
 // 简单的内存速率限制：每个 IP 每分钟最多 10 次请求
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 10; // 每分钟最大请求数
